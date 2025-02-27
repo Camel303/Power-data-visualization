@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电力数据与天气数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+		body {
+		    font-family: 'Arial', sans-serif;
+		    margin: 0;
+		    padding: 0;
+		    background-color: white; /* 设置背景为白色 */
+		    color: #333; /* 字体颜色为深色，增加可读性 */
+		}
+        #chartContainer {
+            width: 100%;
+            height: 600px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>不同年份不同季节的电力负荷与各类发电方式总对比</h2>
+    
+    <div id="chartContainer"></div>
+
+    <script>
+        let chart; // ECharts 实例
+        let energyData; // 电力数据
+
+        // 读取 CSV 数据的函数
+        function readCSV(url) {
+            return fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').map(row => row.split(','));
+                    const headers = rows[0]; // 获取表头
+                    const records = rows.slice(1).map(row => {
+                        const record = {};
+                        headers.forEach((header, index) => {
+                            record[header.trim()] = row[index].trim();
+                        });
+                        return record;
+                    });
+                    return records;
+                });
+        }
+
+        // 主函数：加载电力数据并绘制图表
+        function loadDataAndDrawChart() {
+            Promise.all([
+                readCSV('energy_dataset.csv'),
+            ])
+            .then(([loadedEnergyData]) => {
+                energyData = loadedEnergyData;
+                visualizeAllData(); // 显示所有年份的数据
+            })
+            .catch(error => {
+                console.error('读取 CSV 数据时出错:', error);
+            });
+        }
+
+        // 绘制所有数据
+        function visualizeAllData() {
+            const groupedData = groupByYearAndSeason(energyData);
+            const years = Object.keys(groupedData); // 年份
+            const totalGenerationData = years.map(year => calculateTotalGeneration(groupedData[year])); // 每年的总发电量
+            const totalLoadData = years.map(year => calculateTotalLoad(groupedData[year])); // 每年的总负荷
+            const biomassData = years.map(year => groupedData[year].biomass);
+            const solarData = years.map(year => groupedData[year].solar);
+            const windOnshoreData = years.map(year => groupedData[year].windOnshore);
+            const windOffshoreData = years.map(year => groupedData[year].windOffshore);
+            const nuclearData = years.map(year => groupedData[year].nuclear);
+            const fossilHardCoalData = years.map(year => groupedData[year].fossilHardCoal);
+            const fossilGasData = years.map(year => groupedData[year].fossilGas);
+            const otherData = years.map(year => groupedData[year].other);
+
+            // 初始化ECharts实例
+            if (!chart) {
+                chart = echarts.init(document.getElementById('chartContainer'));
+            }
+
+            // 设置图表配置
+            const option = {
+                
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['总负荷 (MW)', '总发电量 (MW)', '生物质发电 (MW)', '太阳能发电 (MW)', '陆上风能发电 (MW)', '离岸风能发电 (MW)', '核能发电 (MW)', '硬煤发电 (MW)', '天然气发电 (MW)', '其他发电 (MW)']
+                },
+                xAxis: {
+                    type: 'category',
+                    data: years,
+                    axisLabel: {
+                        interval: 0,
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '电力 (MW)',
+                        position: 'left',
+                    },
+                ],
+                series: [
+                    {
+                        name: '总负荷 (MW)',
+                        type: 'line',
+                        data: totalLoadData,
+                        yAxisIndex: 0,
+                        lineStyle: {
+                            color: 'red'
+                        }
+                    },
+                    {
+                        name: '总发电量 (MW)',
+                        type: 'line',
+                        data: totalGenerationData,
+                        yAxisIndex: 0,
+                        lineStyle: {
+                            color: 'orange'
+                        }
+                    },
+                    {
+                        name: '生物质发电 (MW)',
+                        type: 'bar',
+                        data: biomassData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'green'
+                        }
+                    },
+                    {
+                        name: '太阳能发电 (MW)',
+                        type: 'bar',
+                        data: solarData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'yellow'
+                        }
+                    },
+                    {
+                        name: '陆上风能发电 (MW)',
+                        type: 'bar',
+                        data: windOnshoreData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'blue'
+                        }
+                    },
+                    {
+                        name: '离岸风能发电 (MW)',
+                        type: 'bar',
+                        data: windOffshoreData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'lightblue'
+                        }
+                    },
+                    {
+                        name: '核能发电 (MW)',
+                        type: 'bar',
+                        data: nuclearData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'purple'
+                        }
+                    },
+                    {
+                        name: '硬煤发电 (MW)',
+                        type: 'bar',
+                        data: fossilHardCoalData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'brown'
+                        }
+                    },
+                    {
+                        name: '天然气发电 (MW)',
+                        type: 'bar',
+                        data: fossilGasData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'grey'
+                        }
+                    },
+                    {
+                        name: '其他发电 (MW)',
+                        type: 'bar',
+                        data: otherData,
+                        yAxisIndex: 0,
+                        itemStyle: {
+                            color: 'black'
+                        }
+                    },
+                ],
+            };
+
+            // 使用配置项填充图表
+            chart.setOption(option);
+        }
+
+        // 按年份和季节分组电力数据
+        function groupByYearAndSeason(data) {
+            return data.reduce((acc, item) => {
+                const year = item.time.split('-')[0]; // 获取年份
+                if (!acc[year]) {
+                    acc[year] = {
+                        actualLoad: 0,
+                        biomass: 0,
+                        solar: 0,
+                        windOnshore: 0,
+                        windOffshore: 0,
+                        nuclear: 0,
+                        fossilHardCoal: 0,
+                        fossilGas: 0,
+                        other: 0
+                    };
+                }
+                acc[year].actualLoad += parseFloat(item['total load actual'] || 0);
+                acc[year].biomass += parseFloat(item['generation biomass'] || 0);
+                acc[year].solar += parseFloat(item['generation solar'] || 0);
+                acc[year].windOnshore += parseFloat(item['generation wind onshore'] || 0);
+                acc[year].windOffshore += parseFloat(item['generation wind offshore'] || 0);
+                acc[year].nuclear += parseFloat(item['generation nuclear'] || 0);
+                acc[year].fossilHardCoal += parseFloat(item['generation fossil hard coal'] || 0);
+                acc[year].fossilGas += parseFloat(item['generation fossil gas'] || 0);
+                acc[year].other += parseFloat(item['generation other'] || 0);
+                return acc;
+            }, {});
+        }
+
+        // 计算每年的总发电量
+        function calculateTotalGeneration(groupedData) {
+            return groupedData.biomass + groupedData.solar + groupedData.windOnshore + groupedData.windOffshore +
+                   groupedData.nuclear + groupedData.fossilHardCoal + groupedData.fossilGas + groupedData.other;
+        }
+
+        // 计算每年的总负荷
+        function calculateTotalLoad(groupedData) {
+            return groupedData.actualLoad;
+        }
+
+        // 执行主函数以加载数据并绘制图表
+        loadDataAndDrawChart();
+    </script>
+</body>
+</html>

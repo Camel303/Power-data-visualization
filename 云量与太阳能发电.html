@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+	<style>
+		body {
+		    font-family: 'Arial', sans-serif;
+		    margin: 0;
+		    padding: 0;
+		    background-color: white; /* 设置背景为白色 */
+		    color: #333; /* 字体颜色为深色，增加可读性 */
+		}
+	</style>
+</head>
+<body style="height: 100%; margin: 0">
+<div style="padding: 20px;">
+    <label for="year-select">选择年份: </label>
+    <select id="year-select"></select>
+</div>
+<div id="chart" style="height: 80%"></div>
+
+<script>
+    var chart = echarts.init(document.getElementById('chart'));
+    const yearSelect = document.getElementById('year-select');
+    let allData = {};
+
+    // 初始化图表
+    // 初始化图表
+function initChart(dates, solarValues, tempValues, humidityValues, cloudValues) {
+    const option = {
+        title: {
+            text: '每天的太阳能发电总和云量对比图'
+        },
+        tooltip: {
+            trigger: 'axis'
+        },
+        legend: {
+            data: ['太阳能发电量',  '云量']
+        },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            name: '日期'
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '太阳能发电量 (MW)',
+            },
+            {
+                type: 'value',
+                name: '云量',
+                position: 'right'
+            }
+        ],
+        series: [
+            {
+                name: '太阳能发电量',
+                type: 'bar',
+                data: solarValues
+            },
+
+            {
+                name: '云量',
+                type: 'line',
+                yAxisIndex: 1,
+                data: cloudValues
+            }
+        ]
+    };
+    chart.setOption(option);
+}
+
+
+    // 更新图表数据
+    function updateChart(year) {
+        const data = allData[year];
+        if (data) {
+            initChart(data.dates, data.solarValues, data.tempValues, data.humidityValues, data.cloudValues);
+        }
+    }
+
+    // 读取和处理 CSV 数据
+    function loadData() {
+        fetch('energy_dataset.csv')  // 替换为您的CSV文件路径
+            .then(response => response.text())
+            .then(csvData => {
+                Papa.parse(csvData, {
+                    header: true,
+                    complete: function(results) {
+                        const energyData = results.data;
+
+                        fetch('weather_features.csv')  // 替换为您的CSV文件路径
+                            .then(response => response.text())
+                            .then(weatherData => {
+                                Papa.parse(weatherData, {
+                                    header: true,
+                                    complete: function(weatherResults) {
+                                        const weatherData = weatherResults.data;
+
+                                        const dailySolarGeneration = {};
+                                        const dailyWeather = {};
+
+                                        // 处理能量数据
+                                        energyData.forEach(row => {
+                                            const date = row.time.split(" ")[0];
+                                            const year = date.split("-")[0];
+                                            const solar = parseFloat(row["generation solar"]) || 0;
+                                            if (!dailySolarGeneration[year]) dailySolarGeneration[year] = {};
+                                            if (!dailySolarGeneration[year][date]) dailySolarGeneration[year][date] = 0;
+                                            dailySolarGeneration[year][date] += solar;
+                                        });
+
+                                        // 处理天气数据
+                                        weatherData.forEach(row => {
+                                            const date = row.dt_iso.split(" ")[0];
+                                            const year = date.split("-")[0];
+                                            if (!dailyWeather[year]) dailyWeather[year] = {};
+                                            if (!dailyWeather[year][date]) {
+                                                dailyWeather[year][date] = {
+                                                    temp: 0,
+                                                    humidity: 0,
+                                                    clouds: 0,
+                                                    count: 0
+                                                };
+                                            }
+                                            dailyWeather[year][date].temp += parseFloat(row.temp) || 0;
+                                            dailyWeather[year][date].humidity += parseFloat(row.humidity) || 0;
+                                            dailyWeather[year][date].clouds += parseFloat(row.clouds_all) || 0;
+                                            dailyWeather[year][date].count += 1;
+                                        });
+
+                                        // 按年份组织数据
+                                        Object.keys(dailySolarGeneration).forEach(year => {
+                                            const dates = Object.keys(dailySolarGeneration[year]);
+                                            const solarValues = dates.map(date => dailySolarGeneration[year][date]);
+                                            const tempValues = dates.map(date => dailyWeather[year][date] ? (dailyWeather[year][date].temp / dailyWeather[year][date].count) : 0);
+                                            const humidityValues = dates.map(date => dailyWeather[year][date] ? (dailyWeather[year][date].humidity / dailyWeather[year][date].count) : 0);
+                                            const cloudValues = dates.map(date => dailyWeather[year][date] ? (dailyWeather[year][date].clouds / dailyWeather[year][date].count) : 0);
+
+                                            allData[year] = {
+                                                dates, solarValues, tempValues, humidityValues, cloudValues
+                                            };
+
+                                            // 更新年份选择项
+                                            const option = document.createElement("option");
+                                            option.value = year;
+                                            option.textContent = year;
+                                            yearSelect.appendChild(option);
+                                        });
+
+                                        // 默认选择最新年份数据
+                                        const latestYear = Object.keys(allData).sort().pop();
+                                        yearSelect.value = latestYear;
+                                        updateChart(latestYear);
+                                    }
+                                });
+                            });
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading or parsing CSV files:', error));
+    }
+
+    // 监听年份选择变化
+    yearSelect.addEventListener("change", function() {
+        updateChart(yearSelect.value);
+    });
+
+    // 加载数据
+    loadData();
+</script>
+</body>
+</html>
+
+
+
+
+
+
+

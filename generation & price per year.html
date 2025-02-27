@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>各年份发电量波动对比</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.3.3/echarts.min.js"></script>
+    
+</head>
+<body>
+    <div id="myChart" style="width: 75%;height: 400px;"></div>
+	<br>
+	<div id="myChartT" style="width: 75%;height: 400px;"></div>
+
+    <script>
+        // 读取 CSV 数据的函数
+        function readCSV(url) {
+            return fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').map(row => row.split(','));
+                    const headers = rows[0]; // 获取表头
+                    const records = rows.slice(1).map(row => {
+                        const record = {};
+                        headers.forEach((header, index) => {
+                            record[header.trim()] = row[index].trim();
+                        });
+                        return record;
+                    });
+                    return records;
+                });
+        }
+
+        // 渲染图表的函数
+        function renderChart(data) {
+            const chartDom = document.getElementById('myChart');
+            const myChart = echarts.init(chartDom);
+            const option = {
+                title: {
+                    text: '各年份发电量波动对比',
+					subtext:'x轴的年份可忽略，由折线各自代表年份加x轴月日时确认具体时刻',
+                },
+				
+				
+                tooltip: {},
+				
+                legend: {
+                    data: ['2015年发电量','2016年发电量','2017年发电量','2018年发电量'],
+                },
+				
+                xAxis: {
+                    type: 'category',
+                    data: data.map(item => item.time),
+                },
+				
+                yAxis: {
+                    type: 'value',
+                },
+				
+				dataZoom:[{
+					type:'slider',
+					show:true,
+					realtime:true,
+					xAxisIndex:[0],
+					start:35,
+					end:40,
+				}],
+				
+                series: [
+                    {
+                        name: '2015年发电量',
+                        type: 'line',
+                        data: data.map(item => Number(item['generation_total_2015'])),
+                    },
+					
+                    {
+                        name: '2016年发电量',
+                        type: 'line',
+                        data: data.map(item => Number(item['generation_total_2016'])),
+                    },
+                
+				    {
+				        name: '2017年发电量',
+				        type: 'line',
+				        data: data.map(item => Number(item['generation_total_2017'])),
+				    },
+					
+					{
+					    name: '2018年发电量',
+					    type: 'line',
+					    data: data.map(item => Number(item['generation_total_2018'])),
+					},
+                ],
+            };
+            myChart.setOption(option);
+        }
+		
+		function renderChartT(data) {
+		    const chartDomT = document.getElementById('myChartT');
+		    const myChartT = echarts.init(chartDomT);
+		    const optionT = {
+		        title: {
+		            text: '各年份电费波动对比',
+					subtext:'x轴的年份可忽略，由折线各自代表年份加x轴月日时确认具体时刻',
+		        },
+				
+				
+		        tooltip: {},
+				
+		        legend: {
+		            data: ['2015年电费','2016年电费','2017年电费','2018年电费'],
+		        },
+				
+		        xAxis: {
+		            type: 'category',
+		            data: data.map(item => item.time),
+		        },
+				
+		        yAxis: {
+		            type: 'value',
+		        },
+				
+				dataZoom:[{
+					type:'slider',
+					show:true,
+					realtime:true,
+					xAxisIndex:[0],
+					start:35,
+					end:40,
+				}],
+				
+		        series: [
+		            {
+		                name: '2015年电费',
+		                type: 'line',
+		                data: data.map(item => Number(item['price_actual_2015'])),
+		            },
+					
+		            {
+		                name: '2016年电费',
+		                type: 'line',
+		                data: data.map(item => Number(item['price_actual_2016'])),
+		            },
+		        
+				    {
+				        name: '2017年电费',
+				        type: 'line',
+				        data: data.map(item => Number(item['price_actual_2017'])),
+				    },
+					
+					{
+					    name: '2018年电费',
+					    type: 'line',
+					    data: data.map(item => Number(item['price_actual_2018'])),
+					},
+		        ],
+		    };
+		    myChartT.setOption(optionT);
+		}
+		
+        // 加载数据并渲染图表
+        readCSV('energy_dataset.csv').then(data => {
+            renderChart(data);
+			renderChartT(data);
+        }).catch(error => {
+            console.error('读取 CSV 数据时出错:', error);
+        });
+    </script>
+</body>
+</html>

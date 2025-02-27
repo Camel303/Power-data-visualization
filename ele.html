@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>能源数据多图表可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 图表 1: 发电量与电价 -->
+    <h2>发电量与电价</h2>
+    <div id="myChart" class="chart-container"></div>
+    <div id="myChartTwo" class="chart-container"></div>
+
+    <!-- 图表 2: 能源来源占比饼图 -->
+    <h2>能源来源占比饼图</h2>
+    <div id="timeAxis" class="chart-container" style="height: 50px;"></div>
+    <div id="pieChart" class="chart-container"></div>
+
+    <!-- 图表 3: 电力数据与天气数据可视化 -->
+    <h2>电力数据与天气数据</h2>
+    <div id="controls">
+        <label for="dateSelector">选择日期:</label>
+        <input type="date" id="dateSelector" />
+    </div>
+    <div id="chartContainer" class="chart-container" style="height: 600px;"></div>
+
+    <!-- 图表 4: 时间序列折线图 -->
+    <h2>时间序列折线图</h2>
+    <div id="lineChart" class="chart-container"></div>
+
+    <!-- 图表 5: 不同年份能源类型的季节性变化堆叠面积图 -->
+    <h2>不同年份能源类型的季节性变化堆叠面积图</h2>
+    <label for="yearSelect">选择年份:</label>
+    <select id="yearSelect"></select>
+    <div id="main" class="chart-container" style="height: 600px;"></div>
+
+    <script>
+        // 图表 1: 发电量与电价
+        function readCSV(url) {
+            return fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').map(row => row.split(','));
+                    const headers = rows[0];
+                    const records = rows.slice(1).map(row => {
+                        const record = {};
+                        headers.forEach((header, index) => {
+                            record[header.trim()] = row[index].trim();
+                        });
+                        return record;
+                    });
+                    return records;
+                });
+        }
+
+        function renderChart(data) {
+            const chartDom = document.getElementById('myChart');
+            const myChart = echarts.init(chartDom);
+            const option = {
+                title: { text: '发电量与电价', subtext: '电价经正则化，为原数据200倍' },
+                tooltip: {},
+                legend: { data: ['发电量', '电价'] },
+                xAxis: { type: 'category', data: data.map(item => item.time) },
+                yAxis: { type: 'value' },
+                dataZoom: [{ type: 'slider', show: true, realtime: true, xAxisIndex: [0], start: 0, end: 100 }],
+                series: [
+                    { name: '发电量', type: 'line', data: data.map(item => Number(item['total load forecast'])) },
+                    { name: '电价', type: 'line', data: data.map(item => Number(item['price actual']) * 400) }
+                ],
+            };
+            myChart.setOption(option);
+        }
+
+        function renderChartTwo(data) {
+            const chartDomTwo = document.getElementById('myChartTwo');
+            const myChartTwo = echarts.init(chartDomTwo);
+            const optionTwo = {
+                title: { text: '部分发电来源细分', subtext: '电价经正则化，为原数据200倍' },
+                tooltip: {},
+                legend: { data: ['无烟煤', '核能', '陆上风力', '电价'] },
+                xAxis: { type: 'category', data: data.map(item => item.time) },
+                yAxis: { type: 'value' },
+                dataZoom: [{ type: 'slider', show: true, realtime: true, xAxisIndex: [0], start: 0, end: 100 }],
+                series: [
+                    { name: '无烟煤', type: 'line', data: data.map(item => Number(item['generation fossil hard coal'])) },
+                    { name: '核能', type: 'line', data: data.map(item => Number(item['generation nuclear'])) },
+                    { name: '陆上风力', type: 'line', data: data.map(item => Number(item['generation wind onshore'])) },
+                    { name: '电价', type: 'line', data: data.map(item => Number(item['price actual']) * 200) }
+                ],
+            };
+            myChartTwo.setOption(optionTwo);
+        }
+
+        readCSV('energy_dataset.csv').then(data => {
+            renderChart(data);
+            renderChartTwo(data);
+        }).catch(error => {
+            console.error('读取 CSV 数据时出错:', error);
+        });
+
+        // 图表 2: 能源来源占比饼图
+        let chartData = {};
+        let years = [];
+        let pieChart = echarts.init(document.getElementById('pieChart'));
+
+        fetch('energy_dataset.csv')
+            .then(response => response.text())
+            .then(data => {
+                Papa.parse(data, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const combinedData = results.data;
+                        combinedData.forEach(row => {
+                            const date = new Date(row.time);
+                            if (!isNaN(date.getTime())) {
+                                const year = date.getFullYear();
+                                if (!chartData[year]) {
+                                    chartData[year] = {
+                                        'generation fossil gas': 0,
+                                        'generation fossil coal-derived gas': 0,
+                                        'generation biomass': 0,
+                                        'generation fossil hard coal': 0,
+                                        'generation wind offshore': 0,
+                                        'generation wind onshore': 0,
+                                        'generation solar': 0,
+                                    };
+                                    years.push(year);
+                                }
+                                chartData[year]['generation fossil gas'] += row['generation fossil gas'] || 0;
+                                chartData[year]['generation fossil coal-derived gas'] += row['generation fossil coal-derived gas'] || 0;
+                                chartData[year]['generation biomass'] += row['generation biomass'] || 0;
+                                chartData[year]['generation fossil hard coal'] += row['generation fossil hard coal'] || 0;
+                                chartData[year]['generation wind offshore'] += row['generation wind offshore'] || 0;
+                                chartData[year]['generation wind onshore'] += row['generation wind onshore'] || 0;
+                                chartData[year]['generation solar'] += row['generation solar'] || 0;
+                            }
+                        });
+                        updatePieChart(years[0]);
+                        createTimeAxis(years);
+                    }
+                });
+            });
+
+        function createTimeAxis(years) {
+            const timeAxis = echarts.init(document.getElementById('timeAxis'));
+            const timeAxisOption = {
+                tooltip: {},
+                xAxis: { type: 'category', data: years },
+                yAxis: { show: false },
+                series: [{
+                    type: 'scatter',
+                    symbolSize: 20,
+                    data: years.map(year => ({ name: year, value: year })),
+                    itemStyle: { color: '#ff0000' }
+                }]
+            };
+            timeAxis.setOption(timeAxisOption);
+            timeAxis.on('click', function (params) {
+                const selectedYear = years[params.dataIndex];
+                updatePieChart(selectedYear);
+            });
+        }
+
+        function updatePieChart(year) {
+            const data = chartData[year];
+            const option = {
+                title: { text: `${year}年能源来源占比`, left: 'center' },
+                tooltip: { trigger: 'item' },
+                series: [{
+                    name: '能源来源',
+                    type: 'pie',
+                    radius: '50%',
+                    data: [
+                        { value: data['generation fossil gas'], name: '煤气' },
+                        { value: data['generation fossil coal-derived gas'], name: '煤炭衍生气体' },
+                        { value: data['generation biomass'], name: '生物质' },
+                        { value: data['generation fossil hard coal'], name: '硬煤' },
+                        { value: data['generation wind offshore'], name: '海上风能' },
+                        { value: data['generation wind onshore'], name: '陆上风能' },
+                        { value: data['generation solar'], name: '太阳能' }
+                    ].filter(item => item.value > 0),
+                    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
+                }]
+            };
+            pieChart.setOption(option);
+        }
+
+        // 图表 3: 电力数据与天气数据可视化
+        let chart;
+        let energyData;
+        let weatherData;
+
+        function loadDataAndDrawChart() {
+            Promise.all([
+                readCSV('energy_dataset.csv'), 
+                readCSV('weather_features.csv') 
+            ]).then(([loadedEnergyData, loadedWeatherData]) => {
+                energyData = loadedEnergyData;
+                weatherData = loadedWeatherData;
+                populateDateSelector();
+                visualizeData(energyData[0].time.split(' ')[0]);
+            });
+        }
+
+        function populateDateSelector() {
+            const dateSelector = document.getElementById('dateSelector');
+            const uniqueDates = [...new Set(energyData.map(item => item.time.split(' ')[0]))];
+            dateSelector.value = uniqueDates[0];
+            dateSelector.addEventListener('change', (event) => {
+                visualizeData(event.target.value);
+            });
+        }
+
+        function visualizeData(selectedDate) {
+            const dayEnergyData = energyData.filter(item => item.time.startsWith(selectedDate) && parseInt(item.time.split(' ')[1].split(':')[0]) % 2 === 0);
+            const timeData = dayEnergyData.map(item => item.time.split(' ')[1]);
+            const actualLoadData = dayEnergyData.map(item => item['total load actual'] || 0);
+            const biomassData = dayEnergyData.map(item => item['generation biomass'] || 0);
+            const solarData = dayEnergyData.map(item => item['generation solar'] || 0);
+            const windOnshoreData = dayEnergyData.map(item => item['generation wind onshore'] || 0);
+            const windOffshoreData = dayEnergyData.map(item => item['generation wind offshore'] || 0);
+            const nuclearData = dayEnergyData.map(item => item['generation nuclear'] || 0);
+            const fossilHardCoalData = dayEnergyData.map(item => item['generation fossil hard coal'] || 0);
+            const fossilGasData = dayEnergyData.map(item => item['generation fossil gas'] || 0);
+            const otherData = dayEnergyData.map(item => item['generation other'] || 0);
+            const dayWeatherData = weatherData.filter(item => item.dt_iso.startsWith(selectedDate));
+            const temperatureData = dayWeatherData.map(item => Math.round(item.temp - 273.15) || 0);
+            const windSpeedData = dayWeatherData.map(item => Math.round(item.wind_speed) || 0);
+
+            if (!chart) chart = echarts.init(document.getElementById('chartContainer'));
+            const option = {
+                title: { text: `电力负荷与发电方式 - ${selectedDate}` },
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['实际负荷', '生物质发电', '太阳能发电', '风能（陆上）', '风能（海上）', '核能发电', '硬煤发电', '天然气发电', '其他类型', '温度 (°C)', '风速 (m/s)'] },
+                xAxis: { type: 'category', data: timeData, axisLabel: { interval: 0 } },
+                yAxis: [
+                    { type: 'value', name: '电力 (MW)', position: 'left' },
+                    { type: 'value', name: '温度/风速', position: 'right', axisLabel: { formatter: '{value} °C / m/s' } }
+                ],
+                series: [
+                    { name: '实际负荷', type: 'line', data: actualLoadData, smooth: true, yAxisIndex: 0 },
+                    { name: '生物质发电', type: 'bar', data: biomassData, yAxisIndex: 0 },
+                    { name: '太阳能发电', type: 'bar', data: solarData, yAxisIndex: 0 },
+                    { name: '风能（陆上）', type: 'bar', data: windOnshoreData, yAxisIndex: 0 },
+                    { name: '风能（海上）', type: 'bar', data: windOffshoreData, yAxisIndex: 0 },
+                    { name: '核能发电', type: 'bar', data: nuclearData, yAxisIndex: 0 },
+                    { name: '硬煤发电', type: 'bar', data: fossilHardCoalData, yAxisIndex: 0 },
+                    { name: '天然气发电', type: 'bar', data: fossilGasData, yAxisIndex: 0 },
+                    { name: '其他类型', type: 'bar', data: otherData, yAxisIndex: 0 },
+                    { name: '温度', type: 'line', data: temperatureData, smooth: true, yAxisIndex: 1 },
+                    { name: '风速', type: 'line', data: windSpeedData, smooth: true, yAxisIndex: 1 }
+                ]
+            };
+            chart.setOption(option);
+        }
+
+        loadDataAndDrawChart();
+
+        // 图表 4: 时间序列折线图
+        fetch('energy_dataset.csv')
+            .then(response => response.text())
+            .then(data => {
+                Papa.parse(data, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const combinedData = results.data;
+                        const times = combinedData.map(row => row.time);
+                        const generation = combinedData.map(row => row['generation fossil gas']);
+                        const temp = combinedData.map(row => row['generation biomass']);
+
+                        const myChart = echarts.init(document.getElementById('lineChart'));
+                        const option = {
+                            dataZoom: [
+                                { type: 'slider', start: 10, end: 60 },
+                                { type: 'inside', start: 10, end: 60 }
+                            ],
+                            title: { text: '电力生成量与生物质发电量变化' },
+                            tooltip: { trigger: 'axis' },
+                            legend: { data: ['电力生成量', '生物质发电量'] },
+                            xAxis: { type: 'category', data: times },
+                            yAxis: [
+                                { type: 'value', name: '电力生成量', position: 'left' },
+                                { type: 'value', name: '生物质发电量', position: 'right' }
+                            ],
+                            series: [
+                                { name: '电力生成量', type: 'line', data: generation, smooth: true },
+                                { name: '生物质发电量', type: 'line', data: temp, smooth: true, yAxisIndex: 1 }
+                            ]
+                        };
+                        myChart.setOption(option);
+                    }
+                });
+            });
+
+        // 图表 5: 不同年份能源类型的季节性变化堆叠面积图
+        var chartDom = document.getElementById('main');
+                var myChart = echarts.init(chartDom);
+        
+                // 定义能源类型的中文翻译
+                var energyTypeMap = {
+                    'generation biomass': '生物质能',
+                    'generation fossil brown coal/lignite': '褐煤/泥炭煤',
+                    'generation fossil gas': '天然气',
+                    'generation fossil hard coal': '硬煤',
+                    'generation fossil oil': '石油',
+                    'generation hydro water reservoir': '水力发电（水库）',
+                    'generation nuclear': '核能',
+                    'generation solar': '太阳能',
+                    'generation wind onshore': '陆上风电',
+                    'generation wind offshore': '海上风电'
+                };
+        
+                Papa.parse("energy_dataset.csv", {
+                    download: true,
+                    header: true,
+                    complete: function(results) {
+                        var csvData = results.data;
+        
+                        // 按年份将数据分类
+                        var yearlyData = {};
+                        csvData.forEach(function(row) {
+                            var date = new Date(row.time);
+                            if (!isNaN(date.getTime())) {
+                                var year = date.getFullYear();
+                                if (year >= 2015 && year <= 2018) {
+                                    var month = date.getMonth() + 1;
+        
+                                    if (!yearlyData[year]) yearlyData[year] = {};
+                                    if (!yearlyData[year][month]) yearlyData[year][month] = [];
+                                    yearlyData[year][month].push(row);
+                                }
+                            }
+                        });
+        
+                        var yearSelect = document.getElementById('yearSelect');
+                        for (var year in yearlyData) {
+                            var option = document.createElement('option');
+                            option.value = year;
+                            option.textContent = year;
+                            yearSelect.appendChild(option);
+                        }
+        
+                        function drawChart(year) {
+                            var selectedData = yearlyData[year];
+                            var months = [];
+                            var seriesData = {};
+                            Object.keys(energyTypeMap).forEach(function(type) {
+                                seriesData[type] = [];
+                            });
+        
+                            for (var month in selectedData) {
+                                months.push(month);
+                                Object.keys(energyTypeMap).forEach(function(type) {
+                                    var total = 0;
+                                    var count = 0;
+                                    selectedData[month].forEach(function(row) {
+                                        if (row[type] !== "") {
+                                            total += parseFloat(row[type]);
+                                            count++;
+                                        }
+                                    });
+                                    seriesData[type].push(total / count || 0);
+                                });
+                            }
+        
+                            var option = {
+                                title: { text: year + ' 年不同能源类型的季节性变化堆叠面积图', top: 10, left: 'center' },
+                                tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } } },
+                                legend: { data: Object.values(energyTypeMap), top: 50, left: 'center' },
+                                grid: { left: '3%', right: '4%', bottom: '3%', top: 100, containLabel: true },
+                                xAxis: [{
+                                    type: 'category',
+                                    boundaryGap: false,
+                                    data: months.map(month => ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'][month - 1])
+                                }],
+                                yAxis: [{ type: 'value', name: '发电量 (MW)' }],
+                                series: Object.keys(energyTypeMap).map(type => ({
+                                    name: energyTypeMap[type],
+                                    type: 'line',
+                                    stack: '总量',
+                                    areaStyle: {},
+                                    emphasis: { focus: 'series' },
+                                    data: seriesData[type]
+                                }))
+                            };
+                            myChart.setOption(option);
+                        }
+        
+                        yearSelect.addEventListener('change', function() {
+                            drawChart(this.value);
+                        });
+        
+                        if (yearSelect.options.length > 0) {
+                            yearSelect.value = yearSelect.options[0].value;
+                            drawChart(yearSelect.value);
+                        }
+                    }
+                });
+            </script>
+        </body>
+        </html>

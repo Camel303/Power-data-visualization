@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发电量与电价波动</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.3.3/echarts.min.js"></script>
+    <style>
+        #myChart {
+            width: 100%;
+            height: 400px;
+        }
+		
+		#myChartTwo {
+		    width: 100%;
+		    height: 400px;
+		}
+    </style>
+</head>
+<body>
+    <div id="myChart"></div>
+	<div><br/></div>
+	<div id="myChartTwo"></div>
+
+    <script>
+        // 读取 CSV 数据的函数
+        function readCSV(url) {
+            return fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').map(row => row.split(','));
+                    const headers = rows[0]; // 获取表头
+                    const records = rows.slice(1).map(row => {
+                        const record = {};
+                        headers.forEach((header, index) => {
+                            record[header.trim()] = row[index].trim();
+                        });
+                        return record;
+                    });
+                    return records;
+                });
+        }
+
+        // 渲染图表的函数
+        function renderChart(data) {
+            const chartDom = document.getElementById('myChart');
+            const myChart = echarts.init(chartDom);
+            const option = {
+                title: {
+                    text: '发电量与电价',
+					subtext:'电价经正则化，为原数据200倍',
+                },
+				
+				
+                tooltip: {},
+				
+                legend: {
+                    data: ['发电量', '电价'],
+                },
+				
+                xAxis: {
+                    type: 'category',
+                    data: data.map(item => item.time),
+                },
+				
+                yAxis: {
+                    type: 'value',
+                },
+				
+				dataZoom:[{
+					type:'slider',
+					show:true,
+					realtime:true,
+					xAxisIndex:[0],
+					start:0,
+					end:100,
+				}],
+				
+                series: [
+                    {
+                        name: '发电量',
+                        type: 'line',
+                        data: data.map(item => Number(item['total load forecast'])),
+                    },
+					
+                    {
+                        name: '电价',
+                        type: 'line',
+                        data: data.map(item => Number(item['price actual']) * 400),
+                    },
+                
+                ],
+            };
+            myChart.setOption(option);
+        }
+		
+		function renderChartTwo(data) {
+		    const chartDomTwo = document.getElementById('myChartTwo');
+		    const myChartTwo = echarts.init(chartDomTwo);
+		    const optionTwo = {
+		        title: {
+		            text: '部分发电来源细分',
+					subtext:'电价经正则化，为原数据200倍',
+		        },
+				
+		        tooltip: {},
+				
+		        legend: {
+		            data: ['无烟煤','核能','陆上风力', '电价'],
+		        },
+				
+		        xAxis: {
+		            type: 'category',
+		            data: data.map(item => item.time),
+		        },
+				
+		        yAxis: {
+		            type: 'value',
+		        },
+				
+				dataZoom:[{
+					type:'slider',
+					show:true,
+					realtime:true,
+					xAxisIndex:[0],
+					start:0,
+					end:100,
+				}],
+				
+		        series: [
+		            {
+		                name: '无烟煤',
+		                type: 'line',
+		                data: data.map(item => Number(item['generation fossil hard coal'])),
+		            },
+					
+					{
+					    name: '核能',
+					    type: 'line',
+					    data: data.map(item => Number(item['generation nuclear'])),
+					},
+					
+					{
+					    name: '陆上风力',
+					    type: 'line',
+					    data: data.map(item => Number(item['generation wind onshore'])),
+					},
+					
+		            {
+		                name: '电价',
+		                type: 'line',
+		                data: data.map(item => Number(item['price actual']) * 200),
+		            },
+		        
+		        ],
+		    };
+		    myChartTwo.setOption(optionTwo);
+		}
+		
+        // 加载数据并渲染图表
+        readCSV('energy_dataset.csv').then(data => {
+            renderChart(data);
+			renderChartTwo(data);
+        }).catch(error => {
+            console.error('读取 CSV 数据时出错:', error);
+        });
+    </script>
+</body>
+</html>

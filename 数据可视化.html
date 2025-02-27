@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不同年份能源类型的季节性变化堆叠面积图</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+		body {
+		    font-family: 'Arial', sans-serif;
+		    margin: 0;
+		    padding: 0;
+		    background-color: white; /* 设置背景为白色 */
+		    color: #333; /* 字体颜色为深色，增加可读性 */
+		}
+        #main {
+            width: 100%;
+            height: 600px;
+        }
+        #yearSelect {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <label for="yearSelect">选择年份:</label>
+    <select id="yearSelect"></select>
+    <div id="main"></div>
+
+    <script type="text/javascript">
+        var chartDom = document.getElementById('main');
+        var myChart = echarts.init(chartDom);
+        var option;
+
+        // 定义能源类型的中文翻译
+        var energyTypeMap = {
+            'generation biomass': '生物质能',
+            'generation fossil brown coal/lignite': '褐煤/泥炭煤',
+            'generation fossil gas': '天然气',
+            'generation fossil hard coal': '硬煤',
+            'generation fossil oil': '石油',
+            'generation hydro water reservoir': '水力发电（水库）',
+            'generation nuclear': '核能',
+            'generation solar': '太阳能',
+            'generation wind onshore': '陆上风电',
+            'generation wind offshore': '海上风电'
+        };
+
+        // 使用 PapaParse 解析 CSV 文件
+        Papa.parse("energy_dataset.csv", {
+            download: true,
+            header: true,
+            complete: function(results) {
+                var csvData = results.data;
+
+                // 按年份将数据分类
+                var yearlyData = {};
+                csvData.forEach(function(row) {
+                    var date = new Date(row.time);
+                    if (!isNaN(date.getTime())) {
+                        var year = date.getFullYear();
+                        // 只考虑 2015 到 2018 年的数据，过滤掉其他年份
+                        if (year >= 2015 && year <= 2018) {
+                            var month = date.getMonth() + 1;
+
+                            if (!yearlyData[year]) {
+                                yearlyData[year] = {};
+                            }
+                            if (!yearlyData[year][month]) {
+                                yearlyData[year][month] = [];
+                            }
+                            yearlyData[year][month].push(row);
+                        }
+                    }
+                });
+
+                // 在下拉列表中添加年份选项
+                var yearSelect = document.getElementById('yearSelect');
+                for (var year in yearlyData) {
+                    var option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    yearSelect.appendChild(option);
+                }
+
+                // 绘制图表函数
+                function drawChart(year) {
+                    var selectedData = yearlyData[year];
+                    var months = [];
+                    var seriesData = {};
+
+                    // 初始化系列数据
+                    Object.keys(energyTypeMap).forEach(function(type) {
+                        seriesData[type] = [];
+                    });
+
+                    // 计算每月的平均值
+                    for (var month in selectedData) {
+                        months.push(month);
+                        Object.keys(energyTypeMap).forEach(function(type) {
+                            var total = 0;
+                            var count = 0;
+                            selectedData[month].forEach(function(row) {
+                                if (row[type] !== "") {
+                                    total += parseFloat(row[type]);
+                                    count++;
+                                }
+                            });
+                            seriesData[type].push(total / count || 0);
+                        });
+                    }
+
+                    // 配置 ECharts 图表
+                    option = {
+                        title: {
+                            text: year + ' 年不同能源类型的季节性变化堆叠面积图',
+                            top: 10,
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'cross',
+                                label: {
+                                    backgroundColor: '#6a7985'
+                                }
+                            }
+                        },
+                        legend: {
+                            data: Object.values(energyTypeMap),
+                            top: 50,  // 调整图例的位置，避免和标题重叠
+                            left: 'center'
+                        },
+                        toolbox: {
+                            feature: {
+                                saveAsImage: {}
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '3%',
+                            top: 100,  // 增加顶部间距，避免和标题或图例重叠
+                            containLabel: true
+                        },
+                        xAxis: [
+                            {
+                                type: 'category',
+                                boundaryGap: false,
+                                data: months.map(function(month) {
+                                    return ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'][month - 1];
+                                })
+                            }
+                        ],
+                        yAxis: [
+                            {
+                                type: 'value',
+                                name: '发电量 (MW)'
+                            }
+                        ],
+                        series: Object.keys(energyTypeMap).map(function(type) {
+                            return {
+                                name: energyTypeMap[type],
+                                type: 'line',
+                                stack: '总量',
+                                areaStyle: {},
+                                emphasis: {
+                                    focus: 'series'
+                                },
+                                data: seriesData[type]
+                            };
+                        })
+                    };
+
+                    myChart.setOption(option);
+                }
+
+                // 监听下拉列表的变化事件
+                yearSelect.addEventListener('change', function() {
+                    drawChart(this.value);
+                });
+
+                // 默认绘制第一个年份的数据
+                if (yearSelect.options.length > 0) {
+                    yearSelect.value = yearSelect.options[0].value;
+                    drawChart(yearSelect.value);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

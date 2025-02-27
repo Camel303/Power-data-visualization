@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>能源来源占比饼图</title>
+    <!-- 引入 ECharts 和 PapaParse 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+		body {
+		    font-family: 'Arial', sans-serif;
+		    margin: 0;
+		    padding: 0;
+		    background-color: white; /* 设置背景为白色 */
+		    color: #333; /* 字体颜色为深色，增加可读性 */
+		}
+        /* 设置饼图的样式 */
+        #pieChart {
+            width: 100%;
+            height: 400px;
+        }
+        /* 设置时间轴的样式 */
+        #timeAxis {
+            width: 100%;
+            height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 时间轴和饼图的容器 -->
+    <div id="timeAxis" style="height: 50px;"></div>
+    <div id="pieChart"></div>
+
+    <script>
+        // 初始化存储每年数据的对象和年份数组
+        let chartData = {}; // 存储每年的数据
+        let years = []; // 存储年份
+
+        // 初始化饼图
+        let pieChart = echarts.init(document.getElementById('pieChart'));
+
+        // 读取 CSV 文件
+        fetch('energy_dataset.csv') // 替换为你的 CSV 文件路径
+            .then(response => response.text())
+            .then(data => {
+                // 使用 PapaParse 解析 CSV 数据
+                Papa.parse(data, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const combinedData = results.data;
+
+                        // 处理每年的数据
+                        combinedData.forEach(row => {
+                            // 验证时间字段是否有效
+                            const date = new Date(row.time);
+                            if (!isNaN(date.getTime())) { // 只有当日期有效时才处理
+                                const year = date.getFullYear();
+                                if (!chartData[year]) {
+                                    // 初始化各类能源的生成量
+                                    chartData[year] = {
+                                        'generation fossil gas': 0,
+                                        'generation fossil coal-derived gas': 0,
+                                        'generation biomass': 0,
+                                        'generation fossil hard coal': 0,
+                                        'generation wind offshore': 0,
+                                        'generation wind onshore': 0,
+                                        'generation solar': 0,
+                                        // 其他能源类型
+                                    };
+                                    years.push(year);
+                                }
+                                // 累加各类能源的生成量
+                                chartData[year]['generation fossil gas'] += row['generation fossil gas'] || 0;
+                                chartData[year]['generation fossil coal-derived gas'] += row['generation fossil coal-derived gas'] || 0;
+                                chartData[year]['generation biomass'] += row['generation biomass'] || 0;
+                                chartData[year]['generation fossil hard coal'] += row['generation fossil hard coal'] || 0;
+                                chartData[year]['generation wind offshore'] += row['generation wind offshore'] || 0;
+                                chartData[year]['generation wind onshore'] += row['generation wind onshore'] || 0;
+                                chartData[year]['generation solar'] += row['generation solar'] || 0;
+                            }
+                        });
+
+                        // 默认展示第一个年份的数据
+                        updatePieChart(years[0]);
+                        // 创建时间轴
+                        createTimeAxis(years);
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading the CSV file:', error));
+
+        // 创建时间轴
+        function createTimeAxis(years) {
+            const timeAxis = echarts.init(document.getElementById('timeAxis'));
+            const timeAxisOption = {
+                tooltip: {},
+                xAxis: {
+                    type: 'category',
+                    data: years
+                },
+                yAxis: {
+                    show: false // 隐藏 y 轴
+                },
+                series: [{
+                    type: 'scatter',
+                    symbolSize: 20,
+                    data: years.map(year => ({ name: year, value: year })),
+                    itemStyle: {
+                        color: '#ff0000'
+                    }
+                }]
+            };
+            timeAxis.setOption(timeAxisOption);
+
+            // 监听时间轴的点击事件
+            timeAxis.on('click', function (params) {
+                const selectedYear = years[params.dataIndex];
+                updatePieChart(selectedYear);
+            });
+        }
+
+        // 更新饼图显示
+        function updatePieChart(year) {
+            const data = chartData[year];
+
+            const option = {
+                title: {
+                    text: `${year}年能源来源占比`,
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'item'
+                },
+                series: [{
+                    name: '能源来源',
+                    type: 'pie',
+                    radius: '50%',
+                    data: [
+                        { value: data['generation fossil gas'], name: '煤气' },
+                        { value: data['generation fossil coal-derived gas'], name: '煤炭衍生气体' },
+                        { value: data['generation biomass'], name: '生物质' },
+                        { value: data['generation fossil hard coal'], name: '硬煤' },
+                        { value: data['generation wind offshore'], name: '海上风能' },
+                        { value: data['generation wind onshore'], name: '陆上风能' },
+                        { value: data['generation solar'], name: '太阳能' }
+                    ].filter(item => item.value > 0), // 仅显示值大于0的项
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            };
+
+            // 更新饼图的显示数据
+            pieChart.setOption(option);
+        }
+    </script>
+</body>
+</html>

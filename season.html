@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电力数据与天气数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: white; /* 设置背景为白色 */
+            color: #333; /* 字体颜色为深色，增加可读性 */
+        }
+        #chartContainer {
+            width: 100%;
+            height: 600px;
+            margin-top: 20px;
+        }
+        #controls {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>电力数据与天气数据可视化</h2>
+
+    <div id="controls">
+        <label for="yearSelector">选择年份:</label>
+        <select id="yearSelector"></select>
+        
+        <label for="seasonSelector">选择季节:</label>
+        <select id="seasonSelector">
+            <option value="spring">春季</option>
+            <option value="summer">夏季</option>
+            <option value="autumn">秋季</option>
+            <option value="winter">冬季</option>
+        </select>
+    </div>
+    
+    <div id="chartContainer"></div>
+
+    <script>
+        let chart; // ECharts 实例
+        let energyData; // 电力数据
+        let weatherData; // 天气数据
+
+        // 读取 CSV 数据的函数
+        function readCSV(url) {
+            return fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').map(row => row.split(','));
+                    const headers = rows[0]; // 获取表头
+                    const records = rows.slice(1).map(row => {
+                        const record = {};
+                        headers.forEach((header, index) => {
+                            record[header.trim()] = row[index].trim();
+                        });
+                        return record;
+                    });
+                    return records;
+                });
+        }
+
+        // 主函数：加载电力和天气数据并绘制图表
+        function loadDataAndDrawChart() {
+            Promise.all([
+                readCSV('energy_dataset.csv'), 
+                readCSV('weather_features.csv') 
+            ])
+            .then(([loadedEnergyData, loadedWeatherData]) => {
+                energyData = loadedEnergyData;
+                weatherData = loadedWeatherData;
+                populateYearSelector(); // 填充年份选择器
+                populateSeasonSelector(); // 填充季节选择器
+                visualizeData(energyData[0].time.split(' ')[0].split('-')[0], 'spring'); // 默认显示第一个年份的春季数据
+            })
+            .catch(error => {
+                console.error('读取 CSV 数据时出错:', error);
+            });
+        }
+
+        function populateYearSelector() {
+            const yearSelector = document.getElementById('yearSelector');
+            const uniqueYears = [...new Set(energyData.map(item => item.time.split(' ')[0].split('-')[0]))]; // 获取唯一年份
+            uniqueYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelector.appendChild(option);
+            });
+            yearSelector.value = uniqueYears[0]; // 设置默认值
+            yearSelector.addEventListener('change', (event) => {
+                visualizeData(event.target.value, document.getElementById('seasonSelector').value); // 根据选择的年份和季节更新图表
+            });
+        }
+
+        function populateSeasonSelector() {
+            const seasonSelector = document.getElementById('seasonSelector');
+            seasonSelector.addEventListener('change', (event) => {
+                visualizeData(document.getElementById('yearSelector').value, event.target.value); // 根据选择的年份和季节更新图表
+            });
+        }
+
+        function getSeasonData(year, season) {
+            const seasonMonths = {
+                spring: [3, 4, 5], // 春季: 3月到5月
+                summer: [6, 7, 8], // 夏季: 6月到8月
+                autumn: [9, 10, 11], // 秋季: 9月到11月
+                winter: [12, 1, 2] // 冬季: 12月到2月
+            };
+
+            const months = seasonMonths[season];
+            const filteredEnergyData = energyData.filter(item => {
+                const itemYear = item.time.split(' ')[0].split('-')[0];
+                const itemMonth = new Date(item.time.split(' ')[0]).getMonth() + 1; // 获取月份
+                return itemYear === year && months.includes(itemMonth);
+            });
+
+            const filteredWeatherData = weatherData.filter(item => {
+                const itemYear = item.dt_iso.split(' ')[0].split('-')[0];
+                const itemMonth = new Date(item.dt_iso).getMonth() + 1; // 获取月份
+                return itemYear === year && months.includes(itemMonth);
+            });
+
+            return { filteredEnergyData, filteredWeatherData };
+        }
+
+        function visualizeData(selectedYear, selectedSeason) {
+            // 获取年份和季节数据
+            const { filteredEnergyData, filteredWeatherData } = getSeasonData(selectedYear, selectedSeason);
+            if (!filteredEnergyData.length || !filteredWeatherData.length) return;
+
+            // 获取当天的电力数据
+            const timeData = filteredEnergyData.map(item => item.time.split(' ')[1]); // 只保留时间部分
+            const actualLoadData = filteredEnergyData.map(item => item['total load actual'] || 0);
+            const biomassData = filteredEnergyData.map(item => item['generation biomass'] || 0);
+            const solarData = filteredEnergyData.map(item => item['generation solar'] || 0);
+            const windOnshoreData = filteredEnergyData.map(item => item['generation wind onshore'] || 0);
+            const windOffshoreData = filteredEnergyData.map(item => item['generation wind offshore'] || 0);
+            const nuclearData = filteredEnergyData.map(item => item['generation nuclear'] || 0);
+            const fossilHardCoalData = filteredEnergyData.map(item => item['generation fossil hard coal'] || 0);
+            const fossilGasData = filteredEnergyData.map(item => item['generation fossil gas'] || 0);
+            const otherData = filteredEnergyData.map(item => item['generation other'] || 0);
+
+            // 初始化ECharts实例
+            if (!chart) {
+                chart = echarts.init(document.getElementById('chartContainer'));
+            }
+
+            // 设置图表配置
+            const option = {
+                title: {
+                    text: '电力负荷与发电量对比'
+                },
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['实际负荷', '生物质发电', '太阳能发电', '风能（陆上）', '风能（海上）', '核能发电', '硬煤发电', '天然气发电', '其他类型']
+                },
+                xAxis: {
+                    type: 'category',
+                    data: timeData,
+                    axisLabel: {
+                        interval: 0,
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '电力 (MW)',
+                        position: 'left',
+                    }
+                ],
+                series: [
+                    {
+                        name: '实际负荷',
+                        type: 'line',
+                        data: actualLoadData,
+                        smooth: true,
+                        lineStyle: {
+                            color: 'red'
+                        },
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '生物质发电',
+                        type: 'bar',
+                        data: biomassData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '太阳能发电',
+                        type: 'bar',
+                        data: solarData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '风能（陆上）',
+                        type: 'bar',
+                        data: windOnshoreData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '风能（海上）',
+                        type: 'bar',
+                        data: windOffshoreData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '核能发电',
+                        type: 'bar',
+                        data: nuclearData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '硬煤发电',
+                        type: 'bar',
+                        data: fossilHardCoalData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '天然气发电',
+                        type: 'bar',
+                        data: fossilGasData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '其他类型',
+                        type: 'bar',
+                        data: otherData,
+                        yAxisIndex: 0
+                    }
+                ],
+            };
+
+            // 使用配置项填充图表
+            chart.setOption(option);
+        }
+
+        // 执行主函数以加载数据并绘制图表
+        loadDataAndDrawChart();
+    </script>
+</body>
+</html>

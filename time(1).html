@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电力数据与天气数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+		body {
+		    font-family: 'Arial', sans-serif;
+		    margin: 0;
+		    padding: 0;
+		    background-color: white; /* 设置背景为白色 */
+		    color: #333; /* 字体颜色为深色，增加可读性 */
+		}
+        #chartContainer {
+            width: 100%;
+            height: 600px;
+            margin-top: 20px;
+        }
+        #controls {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>电力数据与天气数据可视化</h2>
+
+    <div id="controls">
+        <label for="dateSelector">选择日期:</label>
+        <input type="date" id="dateSelector" />
+    </div>
+    
+    <div id="chartContainer"></div>
+
+    <script>
+        let chart; // ECharts 实例
+        let energyData; // 电力数据
+        let weatherData; // 天气数据
+
+        // 读取 CSV 数据的函数
+        function readCSV(url) {
+            return fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').map(row => row.split(','));
+                    const headers = rows[0]; // 获取表头
+                    const records = rows.slice(1).map(row => {
+                        const record = {};
+                        headers.forEach((header, index) => {
+                            record[header.trim()] = row[index].trim();
+                        });
+                        return record;
+                    });
+                    return records;
+                });
+        }
+
+        // 主函数：加载电力和天气数据并绘制图表
+        function loadDataAndDrawChart() {
+            Promise.all([
+                readCSV('energy_dataset.csv'), 
+                readCSV('weather_features.csv') 
+            ])
+            .then(([loadedEnergyData, loadedWeatherData]) => {
+                energyData = loadedEnergyData;
+                weatherData = loadedWeatherData;
+                populateDateSelector(); // 填充日期选择器
+                visualizeData(energyData[0].time.split(' ')[0]); // 默认显示第一条数据的日期
+            })
+            .catch(error => {
+                console.error('读取 CSV 数据时出错:', error);
+            });
+        }
+
+        function populateDateSelector() {
+            const dateSelector = document.getElementById('dateSelector');
+            const uniqueDates = [...new Set(energyData.map(item => item.time.split(' ')[0]))]; // 获取唯一日期
+            dateSelector.value = uniqueDates[0]; // 设置默认值
+            dateSelector.addEventListener('change', (event) => {
+                visualizeData(event.target.value); // 根据选择的日期更新图表
+            });
+        }
+
+        function visualizeData(selectedDate) {
+            // 处理空数据
+            if (!energyData.length || !weatherData.length) return;
+
+            // 获取当天的偶数小时电力数据
+            const dayEnergyData = energyData.filter(item => item.time.startsWith(selectedDate) && parseInt(item.time.split(' ')[1].split(':')[0]) % 2 === 0);
+            const timeData = dayEnergyData.map(item => item.time.split(' ')[1]); // 只保留时间部分
+            const actualLoadData = dayEnergyData.map(item => item['total load actual'] || 0);
+            const biomassData = dayEnergyData.map(item => item['generation biomass'] || 0);
+            const solarData = dayEnergyData.map(item => item['generation solar'] || 0);
+            const windOnshoreData = dayEnergyData.map(item => item['generation wind onshore'] || 0);
+            const windOffshoreData = dayEnergyData.map(item => item['generation wind offshore'] || 0);
+            const nuclearData = dayEnergyData.map(item => item['generation nuclear'] || 0);
+            const fossilHardCoalData = dayEnergyData.map(item => item['generation fossil hard coal'] || 0);
+            const fossilGasData = dayEnergyData.map(item => item['generation fossil gas'] || 0);
+            const otherData = dayEnergyData.map(item => item['generation other'] || 0);
+
+            // 获取当天的天气数据
+            const dayWeatherData = weatherData.filter(item => item.dt_iso.startsWith(selectedDate));
+            const temperatureData = dayWeatherData.map(item => Math.round(item.temp - 273.15) || 0); // 将温度从开尔文转换为摄氏度并取整
+            const windSpeedData = dayWeatherData.map(item => Math.round(item.wind_speed) || 0); // 使用天气数据中的风速并取整
+
+            // 初始化ECharts实例
+            if (!chart) {
+                chart = echarts.init(document.getElementById('chartContainer'));
+            }
+
+            // 设置图表配置
+            const option = {
+                
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['实际负荷', '生物质发电', '太阳能发电', '风能（陆上）', '风能（海上）', '核能发电', '硬煤发电', '天然气发电', '其他类型', '温度 (°C)', '风速 (m/s)']
+                },
+                xAxis: {
+                    type: 'category',
+                    data: timeData,
+                    axisLabel: {
+                        interval: 0,
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '电力 (MW)',
+                        position: 'left',
+                    },
+                    {
+                        type: 'value',
+                        name: '温度/风速',
+                        position: 'right',
+                        axisLabel: {
+                            formatter: '{value} °C / m/s'
+                        }
+                    }
+                ],
+                series: [
+                    {
+                        name: '实际负荷',
+                        type: 'line',
+                        data: actualLoadData,
+                        smooth: true,
+                        lineStyle: {
+                            color: 'red'
+                        },
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '生物质发电',
+                        type: 'bar',
+                        data: biomassData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '太阳能发电',
+                        type: 'bar',
+                        data: solarData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '风能（陆上）',
+                        type: 'bar',
+                        data: windOnshoreData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '风能（海上）',
+                        type: 'bar',
+                        data: windOffshoreData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '核能发电',
+                        type: 'bar',
+                        data: nuclearData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '硬煤发电',
+                        type: 'bar',
+                        data: fossilHardCoalData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '天然气发电',
+                        type: 'bar',
+                        data: fossilGasData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '其他类型',
+                        type: 'bar',
+                        data: otherData,
+                        yAxisIndex: 0
+                    },
+                    {
+                        name: '温度',
+                        type: 'line',
+                        data: temperatureData,
+                        smooth: true,
+                        lineStyle: {
+                            color: 'blue'
+                        },
+                        yAxisIndex: 1
+                    },
+                    {
+                        name: '风速',
+                        type: 'line',
+                        data: windSpeedData,
+                        smooth: true,
+                        lineStyle: {
+                            color: 'green'
+                        },
+                        yAxisIndex: 1
+                    }
+                ],
+            };
+
+            // 使用配置项填充图表
+            chart.setOption(option);
+        }
+
+        // 执行主函数以加载数据并绘制图表
+        loadDataAndDrawChart();
+    </script>
+</body>
+</html>

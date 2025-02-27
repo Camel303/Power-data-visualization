@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主页</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-image: url('l.jpg'); /* 设置背景图片 */
+            background-size: cover; /* 使背景图像覆盖整个页面 */
+            background-position: center; /* 背景居中 */
+            color: #ffffff; /* 字体颜色为白色以增强可读性 */
+            height: 100vh; /* 设置页面高度 */
+            display: flex; /* 使用flexbox布局 */
+        }
+        nav {
+            width: 200px; /* 固定导航栏宽度 */
+            background: rgba(0, 0, 0, 0.7); /* 背景透明黑色 */
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5); /* 添加阴影效果 */
+            display: flex;
+            flex-direction: column; /* 垂直排列按钮 */
+        }
+        button {
+            margin: 10px 0; /* 上下间距 */
+            padding: 12px 20px;
+            font-size: 16px;
+            color: white;
+            background-color: rgba(0, 123, 255, 0.7); /* 背景透明蓝色 */
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s; /* 动画效果 */
+            width: 100%; /* 按钮宽度填满导航栏 */
+        }
+        button:hover {
+            background-color: rgba(0, 86, 179, 0.8); /* 悬停时的颜色 */
+        }
+        .content {
+            flex: 1; /* 内容区域占据剩余空间 */
+            display: flex;
+            flex-direction: column; /* 纵向排列内容 */
+            justify-content: flex-start; /* 内容顶部对齐 */
+            align-items: center; /* 水平居中 */
+            padding: 20px; /* 内容区域内边距 */
+        }
+        iframe {
+            width: 100%; /* 使 iframe 宽度填满内容区域 */
+            height: 100%; /* 设置 iframe 高度为 100% */
+            border: none; /* 去掉边框 */
+            display: none; /* 初始时隐藏 */
+            overflow: hidden; /* 隐藏滚动条 */
+        }
+    </style>
+</head>
+<body>
+    <nav>
+		<button onclick="showContent('csv.html')">发电量变化柱状图</button>
+		
+        <button onclick="showContent('time(1).html')">每天发电方量及负荷对比图</button>
+        <button onclick="showContent('pie.html')">能源来源占比饼图</button>
+        <button onclick="showContent('temwin.html')">总发电量图</button>
+		<button onclick="showContent('Time_series_line_chart.html')">时间序列折线图</button>
+		<button onclick="showContent('数据可视化.html')">不同年份能源类型的季节性变化堆叠面积图</button>
+		<button onclick="showContent('云量与太阳能发电.html')">电力数据与天气数据可视化</button>
+		
+    </nav>
+
+    <div class="content">
+        <iframe id="contentFrame"></iframe>
+    </div>
+
+    <script>
+        function showContent(page) {
+            const iframe = document.getElementById('contentFrame');
+            iframe.src = page; // 设置 iframe 的 src 为所选页面
+            iframe.style.display = 'block'; // 显示 iframe
+        }
+    </script>
+</body>
+</html>
